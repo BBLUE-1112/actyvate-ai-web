@@ -1,0 +1,64 @@
+
+name: Deploy to S3
+
+on:
+  push:
+    branches:
+      - main  # Trigger the workflow when there is a push to the main branch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  # Run this job on the latest Ubuntu environment
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Node.js (only if you’re building the site, like with Next.js or similar)
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'  # Set the Node.js version needed for your build
+
+      # Step 3: Install dependencies (if applicable for your build)
+      - name: Install dependencies
+        run: npm install
+
+      # Step 4: Build the app (if using a build tool)
+      - name: Build the app
+        run: npm run build
+
+      # Step 5: Install AWS CLI v2 or Update Existing Installation
+      - name: Install or Update AWS CLI v2
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"  # Download AWS CLI v2
+          unzip awscliv2.zip  # Unzip the downloaded file
+          sudo ./aws/install --update  # Update AWS CLI v2 if already installed
+
+      # Step 6: Check AWS CLI version to confirm installation
+      - name: Check AWS CLI version
+        run: aws --version
+
+      # Step 7: Configure AWS CLI with GitHub Secrets
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region ${{ secrets.AWS_REGION }}
+
+      # Step 8: Sync files to S3
+      - name: Sync files to S3
+        run: |
+          aws s3 sync ./dist/ s3://actyvate.ai/ --delete --exclude ".git/*" --exclude "node_modules/*"  # Sync only the dist folder
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          
+      # Step 9: Invalidate CloudFront cache
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id E1UF4T8OARB7KS --paths "/*"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
